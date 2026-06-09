@@ -124,11 +124,22 @@ download_image() {
 # ── Customise ─────────────────────────────────────────────────────────────────
 
 customise_image() {
+  log "Switching apt sources to HTTPS"
+  virt-customize -a "$IMAGE_PATH" \
+    --run-command 'sed -i "s|http://|https://|g" /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true'
+  ok "apt sources rewritten to HTTPS"
+
   log "Installing packages into image"
   virt-customize -a "$IMAGE_PATH" \
-    --install qemu-guest-agent \
+    --install apt-transport-https,qemu-guest-agent \
     --run-command 'systemctl enable qemu-guest-agent'
-  ok "qemu-guest-agent installed and enabled"
+  ok "packages installed and enabled"
+
+  log "Disabling IPv6 at kernel level"
+  virt-customize -a "$IMAGE_PATH" \
+    --run-command 'if grep -q "^GRUB_CMDLINE_LINUX_DEFAULT=" /etc/default/grub; then sed -i "s/^\(GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*\)\"/\1 ipv6.disable=1\"/" /etc/default/grub; else echo "GRUB_CMDLINE_LINUX_DEFAULT=\"ipv6.disable=1\"" >> /etc/default/grub; fi' \
+    --run-command 'update-grub'
+  ok "IPv6 disabled via kernel cmdline"
 
   log "Generalising image with virt-sysprep"
   virt-sysprep -a "$IMAGE_PATH"
